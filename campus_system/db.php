@@ -1,16 +1,6 @@
-
 <?php
-$host = "sql211.infinityfree.com";
-$username = "if0_43128475";
-$password = "YOUR_VPANEL_PASSWORD";
-$database = "if0_43128475_campusdb";
-
-$conn = new mysqli($host, $username, $password, $database);
-
+$conn = new mysqli("localhost", "root", "", "campus_system");
 if ($conn->connect_error) {
-    error_log("Database connection failed: " . $conn->connect_error);
-    die("Database connection failed. Please try again later.");
+  die("Connection failed: " . $conn->connect_error);
 }
-
-$conn->set_charset("utf8mb4");
 ?>
