@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Face Detection Overlay</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background: #f4f8ff; color: #111; }
+    h1 { font-size: 24px; margin-bottom: 12px; }
+    #cameraWrapper { position: relative; width: 640px; max-width: 100%; margin-bottom: 16px; }
+    video, canvas { display: block; width: 100%; height: auto; border-radius: 14px; }
+    #overlayCanvas { position: absolute; top: 0; left: 0; z-index: 2; }
+    #guideFrame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+    #status { margin-top: 12px; font-size: 18px; font-weight: 600; }
+    #info { margin-top: 8px; color: #555; }
+    .success { color: #0b6d24; }
+    .warning { color: #c12e34; }
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+  <h1>Face Detection Overlay</h1>
+  <div id="cameraWrapper">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlayCanvas"></canvas>
+    <canvas id="guideFrame"></canvas>
+  </div>
+  <div id="status">Loading models...</div>
+  <div id="info">Models are loaded from <code>/campus-system/models</code>. Use this page on <code>http://localhost/campus-system/face_overlay.html</code>.</div>
+
+  <script>
+    const MODEL_URL = './models';
+    const video = document.getElementById('video');
+    const overlayCanvas = document.getElementById('overlayCanvas');
+    const guideCanvas = document.getElementById('guideFrame');
+    const status = document.getElementById('status');
+    const overlayCtx = overlayCanvas.getContext('2d');
+    const guideCtx = guideCanvas.getContext('2d');
+
+    async function loadModels() {
+      try {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL)
+        ]);
+        status.textContent = 'Models loaded. Starting camera...';
+      } catch (error) {
+        status.textContent = 'Unable to load models from /campus-system/models.';
+        console.error(error);
+      }
+    }
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+        video.srcObject = stream;
+        await video.play();
+        resizeCanvases();
+        drawGuideFrame();
+        status.textContent = 'Camera started. Waiting for face detection...';
+        runDetectionLoop();
+      } catch (error) {
+        status.textContent = 'Camera access denied or unavailable. Please allow webcam access.';
+        console.error(error);
+      }
+    }
+
+    function resizeCanvases() {
+      const width = video.videoWidth || video.clientWidth;
+      const height = video.videoHeight || video.clientHeight;
+      overlayCanvas.width = width;
+      overlayCanvas.height = height;
+      guideCanvas.width = width;
+      guideCanvas.height = height;
+      overlayCanvas.style.width = `${width}px`;
+      overlayCanvas.style.height = `${height}px`;
+      guideCanvas.style.width = `${width}px`;
+      guideCanvas.style.height = `${height}px`;
+    }
+
+    function drawGuideFrame() {
+      const width = guideCanvas.width;
+      const height = guideCanvas.height;
+      guideCtx.clearRect(0, 0, width, height);
+      const frameWidth = width * 0.7;
+      const frameHeight = height * 0.8;
+      const frameX = (width - frameWidth) / 2;
+      const frameY = (height - frameHeight) / 2;
+      guideCtx.strokeStyle = 'rgba(0, 123, 255, 0.7)';
+      guideCtx.lineWidth = 3;
+      guideCtx.setLineDash([10, 8]);
+      guideCtx.strokeRect(frameX, frameY, frameWidth, frameHeight);
+      guideCtx.setLineDash([]);
+    }
+
+    function drawFaceBox(detection) {
+      overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      if (!detection) {
+        return;
+      }
+      const box = detection.box;
+      const centered = isCentered(box);
+      overlayCtx.strokeStyle = centered ? 'rgba(12, 185, 120, 0.95)' : 'rgba(220, 55, 70, 0.95)';
+      overlayCtx.fillStyle = centered ? 'rgba(12, 185, 120, 0.18)' : 'rgba(220, 55, 70, 0.18)';
+      overlayCtx.lineWidth = 4;
+      overlayCtx.strokeRect(box.x, box.y, box.width, box.height);
+      overlayCtx.fillRect(box.x, box.y, box.width, box.height);
+
+      overlayCtx.fillStyle = '#fff';
+      overlayCtx.font = '16px Arial';
+      overlayCtx.fillText(centered ? 'Centered' : 'Not centered', box.x + 8, Math.max(box.y - 10, 20));
+    }
+
+    function isCentered(box) {
+      const videoWidth = overlayCanvas.width;
+      const videoHeight = overlayCanvas.height;
+      const centerX = box.x + box.width / 2;
+      const centerY = box.y + box.height / 2;
+      const xMargin = videoWidth * 0.12;
+      const yMargin = videoHeight * 0.12;
+      return centerX >= videoWidth / 2 - xMargin && centerX <= videoWidth / 2 + xMargin && centerY >= videoHeight / 2 - yMargin && centerY <= videoHeight / 2 + yMargin;
+    }
+
+    async function detectFace() {
+      if (video.paused || video.ended) {
+        return null;
+      }
+      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 });
+      const detection = await faceapi.detectSingleFace(video, options);
+      return detection;
+    }
+
+    async function runDetectionLoop() {
+      if (video.readyState < 2) {
+        requestAnimationFrame(runDetectionLoop);
+        return;
+      }
+      resizeCanvases();
+      const detection = await detectFace();
+      if (detection) {
+        status.textContent = 'Face detected';
+        status.className = 'success';
+        drawFaceBox(detection);
+      } else {
+        status.textContent = 'No face detected';
+        status.className = 'warning';
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+      }
+      setTimeout(runDetectionLoop, 300);
+    }
+
+    window.addEventListener('load', async () => {
+      await loadModels();
+      await startCamera();
+    });
+  </script>
+</body>
+</html>
