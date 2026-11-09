@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Face Verification</title>
+  <script src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #fafbfd;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+      width: 360px;
+      padding: 30px;
+      background: #ffffff;
+      border-radius: 18px;
+      border: 1px solid #dce4ef;
+      box-shadow: 0 1px 3px rgba(22,58,94,0.05);
+      text-align: center;
+      color: #16233d;
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #16233d;
+    }
+
+    video {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid #c7d7ec;
+      transform: scaleX(-1);
+    }
+
+    #status {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #6b7a94;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <h2>Face Verification</h2>
+  <video id="video" autoplay muted playsinline></video>
+  <p id="status">Loading...</p>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const code = params.get("code");
+
+const video = document.getElementById("video");
+const status = document.getElementById("status");
+
+let modelsLoaded = false;
+let verifying = false;
+let hasVerified = false;
+
+async function init() {
+
+  if (!code) {
+    status.innerText = 'Missing code.';
+    return;
+  }
+
+  // Start camera first
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+  } catch (err) {
+    status.innerText = "Camera error: " + err.message;
+    return;
+  }
+
+  // Load models with individual error handling
+  const MODEL_URL = "./models";
+  status.innerText = "Loading models...";
+
+  try {
+    status.innerText = "Loading detector...";
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+
+    status.innerText = "Loading landmarks...";
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+
+    status.innerText = "Loading recognition...";
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
+  } catch (err) {
+    // This will tell you EXACTLY which model failed and why
+    status.innerText = "Model load failed: " + err.message;
+    console.error("Model load error:", err);
+    return;
+  }
+
+  modelsLoaded = true;
+  status.innerText = "Look at the camera...";
+  startDetection();
+}
+
+init();
+
+function startDetection() {
+
+  const interval = setInterval(async () => {
+
+    if (!modelsLoaded || verifying || hasVerified) return;
+
+    const detection = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 160 }))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (!detection) {
+      status.innerText = "No face detected...";
+      return;
+    }
+
+    clearInterval(interval);
+    hasVerified = true;
+    verifying = true;
+    status.innerText = "Verifying...";
+
+    const descriptor = Array.from(detection.descriptor);
+
+    const formData = new URLSearchParams();
+    formData.append('code', code);
+    formData.append('face_descriptor', JSON.stringify(descriptor));
+
+    fetch('face_verify.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData.toString()
+    })
+    .then(res => res.text())
+    .then(data => {
+      document.open();
+      document.write(data);
+      document.close();
+    })
+    .catch(err => {
+      console.error(err);
+      status.innerText = "Verification error.";
+    });
+
+  }, 700);
+}
+</script>
+
+</body>
+</html>

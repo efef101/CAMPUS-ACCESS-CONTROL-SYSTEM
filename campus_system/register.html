@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Register User</title>
+
+<script defer src="https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+<style>
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #fafbfd;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ========== CONSENT OVERLAY ========== */
+#consentOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(22, 35, 61, 0.55);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.consent-modal {
+  width: 520px;
+  background: #ffffff;
+  border: 1px solid #dce4ef;
+  border-radius: 16px;
+  padding: 36px 38px 32px;
+  color: #16233d;
+  box-shadow: 0 30px 80px rgba(22,58,94,0.25);
+}
+
+.consent-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.consent-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #eef3fa;
+  color: #1c3a5e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.consent-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: #16233d;
+}
+
+.consent-header p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #8a9bb5;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.consent-divider {
+  border: none;
+  border-top: 1px solid #eef2f8;
+  margin: 0 0 20px;
+}
+
+.consent-body {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #4a5b78;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #c7d7ec transparent;
+}
+
+.consent-body h3 {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #8a9bb5;
+  margin: 18px 0 6px;
+}
+
+.consent-body h3:first-child {
+  margin-top: 0;
+}
+
+.consent-body ul {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+
+.consent-body ul li {
+  margin-bottom: 4px;
+}
+
+.consent-body p {
+  margin: 0 0 8px;
+}
+
+.consent-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 22px 0 20px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.consent-check-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: #1c3a5e;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.consent-check-row label {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #3c4a63;
+  cursor: pointer;
+}
+
+.consent-actions {
+  display: flex;
+  gap: 10px;
+}
+
+#consentDecline {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #dce4ef;
+  background: #ffffff;
+  color: #6b7a94;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#consentDecline:hover {
+  background: #f4f7fb;
+  color: #16233d;
+}
+
+#consentAccept {
+  flex: 2;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #1c3a5e;
+  background: #1c3a5e;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+#consentAccept.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* ========== DECLINED STATE ========== */
+#declinedOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  background: rgba(22, 35, 61, 0.65);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  color: #ffffff;
+  font-size: 14px;
+  text-align: center;
+}
+
+#declinedOverlay .declined-icon {
+  font-size: 36px;
+  margin-bottom: 4px;
+}
+
+#declinedOverlay button {
+  margin-top: 8px;
+  padding: 8px 22px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.4);
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+/* ========== MAIN FORM ========== */
+.form-wrapper {
+  width: 850px;
+  height: 500px;
+  display: flex;
+  background: #ffffff;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid #dce4ef;
+  box-shadow: 0 1px 3px rgba(22,58,94,0.05);
+  transition: filter 0.3s;
+}
+
+.form-wrapper.blurred {
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+.left {
+  width: 50%;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #16233d;
+}
+
+h2 {
+  margin-bottom: 15px;
+  font-weight: 600;
+  color: #16233d;
+}
+
+input, select {
+  width: 100%;
+  padding: 10px;
+  margin-top: 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #c7d7ec;
+  color: #16233d;
+}
+
+input::placeholder {
+  color: #a3b3cc;
+}
+
+select option {
+  color: #16233d;
+}
+
+input:focus, select:focus {
+  outline: none;
+  border-bottom: 1px solid #1c3a5e;
+}
+
+button {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+}
+
+#captureButton {
+  background: #eef3fa;
+  color: #1c3a5e;
+  border: 1px solid #c7d7ec;
+}
+
+button[type="submit"] {
+  background: #1c3a5e;
+  color: #fff;
+  font-weight: 600;
+}
+
+.right {
+  width: 50%;
+  background: #f4f7fb;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+video {
+  width: 80%;
+  border-radius: 12px;
+  border: 1px solid #c7d7ec;
+  transform: scaleX(-1);
+}
+
+#status {
+  margin-top: 10px;
+  color: #6b7a94;
+  font-size: 13px;
+}
+
+.consent-badge {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: #eef3fa;
+  border: 1px solid #c7d7ec;
+  font-size: 11px;
+  color: #3c5a80;
+  width: fit-content;
+}
+
+.consent-badge.visible {
+  display: flex;
+}
+
+.consent-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16a34a;
+  flex-shrink: 0;
+}
+</style>
+</head>
+
+<body>
+
+<!-- ========== CONSENT MODAL ========== -->
+<div id="consentOverlay">
+  <div class="consent-modal">
+    <div class="consent-header">
+      <div class="consent-icon">C</div>
+      <div>
+        <h2>Biometric Data Consent</h2>
+        <p>Required before registration</p>
+      </div>
+    </div>
+    <hr class="consent-divider">
+
+    <div class="consent-body">
+      <h3>What we collect</h3>
+      <p>This system collects and processes the following biometric information:</p>
+      
+      <h3>Purpose of collection</h3>
+      <p>Your biometric data will be used exclusively for:</p>
+      <ul>
+        <li>Identity verification during entry and exit logging</li>
+        <li>Attendance tracking within authorized premises</li>
+      </ul>
+
+      <h3>How it is stored</h3>
+      <ul>
+        <li>Data is stored in a secured database accessible only to authorized administrators</li>
+        <li>Facial images are stored as encoded data and are not shared with third parties</li>
+      </ul>
+
+      <h3>Your rights</h3>
+      <ul>
+        <li>You may request deletion of your biometric data by contacting the system administrator</li>
+        <li>Providing biometric data is required to use this registration system</li>
+        <li>By consenting, you acknowledge this data will be used for identification purposes</li>
+      </ul>
+
+      <h3>Legal basis</h3>
+      <p>Collection is conducted in compliance with applicable data privacy laws. Your data will not be sold, rented, or disclosed to unauthorized parties.</p>
+    </div>
+
+    <div class="consent-check-row" onclick="toggleConsent()">
+      <input type="checkbox" id="consentCheckbox">
+      <label for="consentCheckbox">
+        I have read and understood the above, and I voluntarily consent to the collection and processing of my biometric data for the stated purposes.
+      </label>
+    </div>
+
+    <div class="consent-actions">
+      <button id="consentDecline" onclick="declineConsent()">Decline</button>
+      <button id="consentAccept" onclick="acceptConsent()">Accept &amp; Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== DECLINED STATE ========== -->
+<div id="declinedOverlay">
+  <div class="declined-icon">🚫</div>
+  <div>Consent was declined.</div>
+  <div style="font-size:12px; color:rgba(255,255,255,0.7);">You must consent to biometric data collection to register.</div>
+  <button onclick="reopenConsent()">Review Consent Again</button>
+</div>
+
+<!-- ========== MAIN FORM ========== -->
+<form id="registerForm">
+<div class="form-wrapper blurred" id="mainCard">
+
+  <!-- LEFT -->
+  <div class="left">
+    <div class="consent-badge" id="consentBadge">
+      <span class="consent-badge-dot"></span>
+      Biometric consent granted
+    </div>
+    <h2>Register</h2>
+
+    <input type="text" name="id_number" placeholder="ID Number" required>
+    <input type="text" name="first_name" placeholder="First Name" required>
+    <input type="text" name="last_name" placeholder="Last Name" required>
+
+    <select name="role" id="role" onchange="toggleFields()" required>
+      <option value="">Select Role</option>
+      <option value="student">Student</option>
+      <option value="faculty">Faculty</option>
+      <option value="staff">Staff</option>
+    </select>
+
+    <div id="studentFields">
+      <select name="department_student" id="department" onchange="updateCourses()">
+        <option value="">Select College</option>
+        <option value="College of Education">College of Education</option>
+        <option value="College of Engineering">College of Engineering</option>
+        <option value="College of Technology">College of Technology</option>
+        <option value="College of Management and Entrepreneurship">College of Management and Entrepreneurship</option>
+        <option value="College of CICT">College of CICT</option>
+        <option value="College of Arts and Sciences">College of Arts and Sciences</option>
+      </select>
+
+      <select name="course" id="course">
+        <option value="">Select Course</option>
+      </select>
+    </div>
+
+    <div id="staffFields" style="display:none;">
+      <input type="text" name="department_staff" placeholder="Department">
+      <input type="text" name="position" placeholder="Position">
+    </div>
+
+    <button type="button" id="captureButton" onclick="capture()">Capture Face</button>
+    <button type="button" onclick="submitForm()">Register</button>
+    <input type="hidden" name="face_descriptor" id="face_descriptor">
+    <input type="hidden" name="face_image" id="face_image">
+  </div>
+
+  <!-- RIGHT -->
+  <div class="right">
+    <video id="video" autoplay muted></video>
+    <p id="status">Starting...</p>
+  </div>
+
+</div>
+</form>
+
+<script>
+/* ========== CONSENT LOGIC ========== */
+let consentGiven = false;
+
+function toggleConsent() {
+  const cb = document.getElementById("consentCheckbox");
+  cb.checked = !cb.checked;
+  document.getElementById("consentAccept").classList.toggle("active", cb.checked);
+}
+
+function acceptConsent() {
+  consentGiven = true;
+  document.getElementById("consentOverlay").style.display = "none";
+  document.getElementById("mainCard").classList.remove("blurred");
+  document.getElementById("consentBadge").classList.add("visible");
+}
+
+function declineConsent() {
+  document.getElementById("consentOverlay").style.display = "none";
+  document.getElementById("declinedOverlay").style.display = "flex";
+  document.getElementById("mainCard").classList.add("blurred");
+}
+
+function reopenConsent() {
+  document.getElementById("declinedOverlay").style.display = "none";
+  document.getElementById("consentOverlay").style.display = "flex";
+  document.getElementById("consentCheckbox").checked = false;
+  document.getElementById("consentAccept").classList.remove("active");
+}
+
+/* ========== FORM LOGIC ========== */
+function toggleFields() {
+  const role = document.getElementById("role").value;
+  document.getElementById("studentFields").style.display =
+    (role === "student") ? "block" : "none";
+  document.getElementById("staffFields").style.display =
+    (role !== "student") ? "block" : "none";
+}
+
+const courseMap = {
+  "College of Education": ["BEEd","BECEd","BSNEd","BSEd-Math","BSEd-Science","BSEd-English"],
+  "College of Engineering": ["BSCE","BSCpE","BSECE","BSEE","BSIE","BSME"],
+  "College of Technology": ["BSMx","BSGD","BSTechM"],
+  "College of Management and Entrepreneurship": ["BPA","BSHM","BSBA-MM","BSTM"],
+  "College of CICT": ["BSIT","BSIS","BIT-CT"],
+  "College of Arts and Sciences": ["BS Psychology","BS Math","BS Nursing"]
+};
+
+function updateCourses() {
+  const dept = document.getElementById("department").value;
+  const course = document.getElementById("course");
+  course.innerHTML = '<option value="">Select Course</option>';
+  if (courseMap[dept]) {
+    courseMap[dept].forEach(c => {
+      let opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      course.appendChild(opt);
+    });
+  }
+}
+
+const video = document.getElementById("video");
+const status = document.getElementById("status");
+
+async function initCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  video.srcObject = stream;
+  status.innerText = "Camera ready";
+}
+
+async function loadModels() {
+  const MODEL_URL = "./models";
+  await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+  await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+  await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+  status.innerText = "Ready";
+}
+
+window.onload = async () => {
+  await initCamera();
+  await loadModels();
+};
+
+async function capture() {
+  if (!consentGiven) {
+    alert("⚠️ You must accept the biometric data consent before capturing.");
+    return;
+  }
+
+  document.getElementById("face_descriptor").value = "";
+  document.getElementById("face_image").value = "";
+
+  const status = document.getElementById("status");
+  let count = 3;
+  status.innerText = "Get ready...";
+
+  const countdownInterval = setInterval(() => {
+    status.innerText = "Capturing in " + count + "...";
+    count--;
+    if (count < 0) {
+      clearInterval(countdownInterval);
+      startCapture();
+    }
+  }, 800);
+}
+
+async function startCapture() {
+  const status = document.getElementById("status");
+  status.innerText = "Hold still...";
+
+  let detection = null;
+
+  for (let i = 0; i < 5; i++) {
+    detection = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (detection) break;
+
+    status.innerText = "Adjusting... " + (i + 1);
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  if (!detection) {
+    status.innerText = "❌ Face not detected. Try again.";
+    return;
+  }
+
+  document.getElementById("face_descriptor").value =
+    JSON.stringify(Array.from(detection.descriptor));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+
+  const imageData = canvas.toDataURL("image/jpeg");
+  document.getElementById("face_image").value = imageData;
+
+  status.innerText = "✅ Face captured successfully!";
+}
+
+async function submitForm() {
+  if (!consentGiven) {
+    alert("⚠️ Biometric consent is required to register.");
+    return;
+  }
+
+  const form = document.getElementById("registerForm");
+  const descriptor = document.getElementById("face_descriptor").value;
+  const image = document.getElementById("face_image").value;
+
+  if (!descriptor || !image) {
+    alert("❌ Capture your face first.");
+    return;
+  }
+
+  const payload = {
+    id_number: form.id_number.value,
+    first_name: form.first_name.value,
+    last_name: form.last_name.value,
+    role: form.role.value,
+    department_student: form.department_student ? form.department_student.value : "",
+    course: form.course ? form.course.value : "",
+    department_staff: form.department_staff ? form.department_staff.value : "",
+    position: form.position ? form.position.value : "",
+    face_descriptor: descriptor,
+    face_image: image
+  };
+
+  try {
+    const res = await fetch("register.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await res.text();
+    alert(text);
+
+    if (text.includes("✅")) {
+      form.reset();
+      document.getElementById("face_descriptor").value = "";
+      document.getElementById("face_image").value = "";
+      document.getElementById("status").innerText = "Ready for next person";
+
+      // Reset consent for next person
+      consentGiven = false;
+      document.getElementById("consentCheckbox").checked = false;
+      document.getElementById("consentAccept").classList.remove("active");
+      document.getElementById("consentBadge").classList.remove("visible");
+      document.getElementById("mainCard").classList.add("blurred");
+      document.getElementById("consentOverlay").style.display = "flex";
+    }
+
+  } catch (err) {
+    alert("Error submitting form");
+    console.error(err);
+  }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+    background: #fafbfd;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .container {
+    width: 360px;
+    padding: 30px;
+
+    background: #ffffff;
+
+    border-radius: 18px;
+    border: 1px solid #dce4ef;
+    box-shadow: 0 1px 3px rgba(22,58,94,0.05);
+
+    text-align: center;
+    color: #16233d;
+  }
+
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    color: #16233d;
+  }
+
+  #reader {
+    width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #c7d7ec;
+  }
+
+  #result {
+    margin-top: 15px;
+    font-size: 14px;
+    color: #6b7a94;
+  }
+
+  .back {
+    margin-top: 15px;
+  }
+
+  .back a {
+    text-decoration: none;
+    font-size: 13px;
+    color: #8a9bb5;
+  }
+
+  .back a:hover {
+    color: #1c3a5e;
+  }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h2>Scan QR / Barcode</h2>
+
+  <div id="reader"></div>
+
+  <p id="result">Point the camera at a QR code or barcode to begin.</p>
+
+  <div class="back">
+    <a href="dashboard.php">← Back to Dashboard</a>
+  </div>
+
+</div>
+
+<!-- SOUNDS -->
+<audio id="successSound" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="errorSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
+<script>
+let isScanning = true;
+let scanComplete = false;
+let lastScanTime = 0;
+const cooldown = 3000;
+let html5QrCode;
+
+function playSuccess() {
+  document.getElementById('successSound').play();
+  if (navigator.vibrate) navigator.vibrate(200);
+}
+
+function playError() {
+  document.getElementById('errorSound').play();
+  if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+}
+
+function stopScanning(message) {
+  scanComplete = true;
+  isScanning = false;
+
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => html5QrCode.clear()).then(() => {
+      html5QrCode = null;
+      if (message) {
+        document.getElementById('result').innerHTML += '<br><strong>' + message + '</strong>';
+      }
+    }).catch(() => {
+      html5QrCode = null;
+    });
+  }
+}
+
+function isUserBarcode(code) {
+  return /^[0-9]{1,8}$/.test(code);
+}
+
+function fetchVerify(code) {
+  stopScanning();
+
+  fetch('face_verify.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'code=' + encodeURIComponent(code)
+  })
+  .then(res => res.text())
+  .then(data => {
+    document.open();
+    document.write(data);
+    document.close();
+  })
+  .catch(() => {
+    playError();
+    document.getElementById('result').innerHTML = '❌ Error processing scan';
+  });
+}
+
+function onScanSuccess(decodedText, decodedResult) {
+
+  const currentTime = Date.now();
+
+  if (scanComplete || !isScanning || (currentTime - lastScanTime < cooldown)) {
+    return;
+  }
+
+  isScanning = false;
+  lastScanTime = currentTime;
+
+  const code = decodedText.trim();
+  const resultText = document.getElementById('result');
+
+  const formatName =
+    decodedResult?.result?.format?.formatName ||
+    decodedResult?.format?.formatName ||
+    decodedResult?.format ||
+    decodedResult?.type || '';
+
+  const normalizedFormat = formatName.toString().toUpperCase();
+  const isQr = normalizedFormat.includes('QR');
+
+  playSuccess();
+
+  if (isQr) {
+    resultText.innerText = 'QR code detected. Verifying...';
+    fetchVerify(code);
+    return;
+  }
+
+  if (isUserBarcode(code)) {
+    const useFace = confirm('Use face verification?');
+
+    if (useFace) {
+      window.location.href = 'face_verify.html?code=' + encodeURIComponent(code);
+      return;
+    }
+
+    fetchVerify(code);
+    return;
+  }  
+
+  resultText.innerText = 'Processing...';
+  fetchVerify(code);
+}
+
+// START CAMERA
+html5QrCode = new Html5Qrcode("reader");
+
+Html5Qrcode.getCameras().then(devices => {
+  if (devices.length) {
+    html5QrCode.start(
+      devices[0].id,
+      { fps: 15, qrbox: 250 },
+      onScanSuccess
+    );
+  }
+}).catch(err => {
+  document.getElementById('result').innerText = 'Camera error: ' + err;
+});
+</script>
+
+</body>
+</html>
