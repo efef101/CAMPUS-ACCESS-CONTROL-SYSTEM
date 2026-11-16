@@ -1,0 +1,34 @@
+<?php
+include 'db.php';
+
+$code = $_POST['code'] ?? '';
+
+if (!$code) {
+  echo json_encode(["type" => "invalid"]);
+  exit;
+}
+
+// check users
+$stmt = $conn->prepare("SELECT id_number FROM users WHERE id_number=?");
+$stmt->bind_param("s", $code);
+$stmt->execute();
+$res = $stmt->get_result();
+
+if ($res->num_rows > 0) {
+  echo json_encode(["type" => "user"]);
+  exit;
+}
+
+// check visitors
+$stmt = $conn->prepare("SELECT qr_code FROM visitors WHERE qr_code=?");
+$stmt->bind_param("s", $code);
+$stmt->execute();
+$res = $stmt->get_result();
+
+if ($res->num_rows > 0) {
+  echo json_encode(["type" => "visitor"]);
+  exit;
+}
+
+echo json_encode(["type" => "unknown"]);
+?>
